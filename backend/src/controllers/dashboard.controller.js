@@ -100,3 +100,21 @@ export const getInsights = async (req, res) => {
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };
+
+// GET /api/dashboard/leads
+export const getDashboardLeads = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const leads = await prisma.lead.findMany({
+            where: { userId },
+            orderBy: { createdAt: 'desc' },
+            include: { property: { select: { title: true } } },
+        });
+
+        res.json({ success: true, data: leads });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+

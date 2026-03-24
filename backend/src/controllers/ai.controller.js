@@ -1,4 +1,5 @@
 import prisma from '../utils/prisma.js';
+import { generateContent } from '../services/ai.service.js';
 
 // POST /api/ai/generate
 export const generateAIContent = async (req, res) => {
@@ -8,6 +9,22 @@ export const generateAIContent = async (req, res) => {
 
         if (!prompt) return res.status(400).json({ success: false, message: 'Prompt is required' });
         if (!actionType) return res.status(400).json({ success: false, message: 'actionType is required (Caption or Reply)' });
+
+        // AI Usage Limits: 3 generations per hour (for free users)
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        const count = await prisma.aIRecord.count({
+            where: {
+                userId,
+                createdAt: { gte: oneHourAgo },
+            },
+        });
+
+        if (count >= 3) {
+            return res.status(429).json({
+                success: false,
+                message: 'Hourly AI limit reached. You can only generate 3 completions per hour on the free plan.'
+            });
+        }
 
         // Build a context-aware prompt if a propertyId is provided
         let enrichedPrompt = prompt;
@@ -20,24 +37,23 @@ export const generateAIContent = async (req, res) => {
             }
         }
 
-        // TODO: Replace this mock response with your actual AI provider (OpenAI, Gemini, etc.)
-        // Example: const completion = await openai.chat.completions.create({ ... })
-        const mockResponse = generateMockResponse(actionType, enrichedPrompt);
+        // Call real Gemini AI service
+        const aiResponse = await generateContent(enrichedPrompt, actionType);
 
         // Save the record for history
         const aiRecord = await prisma.aIRecord.create({
             data: {
                 prompt: enrichedPrompt,
-                response: mockResponse,
+                response: aiResponse,
                 actionType,
                 userId,
             },
         });
 
-        res.status(201).json({ success: true, data: { response: mockResponse, id: aiRecord.id } });
+        res.status(201).json({ success: true, data: { response: aiResponse, id: aiRecord.id } });
     } catch (err) {
         console.error(err);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({ success: false, message: err.message || 'Server error' });
     }
 };
 
@@ -55,13 +71,3 @@ export const getAIHistory = async (req, res) => {
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };
-
-function generateMockResponse(actionType, prompt) {
-    if (actionType === 'Caption') {
-        return `✨ Stunning property alert in Addis Ababa! 🏠\n\n${prompt.substring(0, 80)}...\n\nContact us today for a viewing!\n\n#AddisAbabaRealEstate #EthiopiaHomes #PropertyForSale #AddisLead #RealEstateEthiopia #TikTokRealEstate`;
-    }
-    if (actionType === 'Reply') {
-        return `Hello! Thank you for your interest. We would love to arrange a viewing for you. Please share your available times and we will confirm a slot as soon as possible. Feel free to reach out via WhatsApp or Telegram for a quicker response! 🏠`;
-    }
-    return `AI response for: ${prompt}`;
-}

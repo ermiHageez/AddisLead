@@ -6,6 +6,7 @@ import propertyRoutes from "./routes/property.routes.js";
 import dashboardRoutes from "./routes/dashboard.routes.js";
 import aiRoutes from "./routes/ai.routes.js";
 import userRoutes from "./routes/user.routes.js";
+import webhookRoutes from "./routes/webhook.js";
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.use("/api/properties", propertyRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/webhook", webhookRoutes);
 
 // 404 handler
 app.use((req, res) => {

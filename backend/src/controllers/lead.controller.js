@@ -35,18 +35,30 @@ export const getLeads = async (req, res) => {
 export const createLead = async (req, res) => {
     try {
         const userId = req.user.id;
-        const { name, phone, platformSource, status, budget, notes, propertyId } = req.body;
+        const { name, phone, message, source, platformSource, propertyInterest, status, budget, notes, propertyId } = req.body;
 
         if (!name) return res.status(400).json({ success: false, message: 'Lead name is required' });
+
+        // Basic Ethiopian phone validation if phone is provided
+        if (phone) {
+            const ethPhoneRegex = /^\+251[79]\d{8}$/;
+            const altEthPhoneRegex = /^0[79]\d{8}$/;
+            if (!ethPhoneRegex.test(phone) && !altEthPhoneRegex.test(phone)) {
+                return res.status(400).json({ success: false, message: 'Invalid Ethiopian phone format. Use +251... or 09.../07...' });
+            }
+        }
 
         const lead = await prisma.lead.create({
             data: {
                 name,
-                phone,
-                platformSource,
+                phone: phone || null,
+                message: message || null,
+                source: source || platformSource || 'Manual',
+                platformSource: platformSource || source || 'Manual',
+                propertyInterest: propertyInterest || null,
                 status: status || 'NEW',
                 budget: budget ? parseFloat(budget) : null,
-                notes,
+                notes: notes || null,
                 userId,
                 propertyId: propertyId || null,
             },
@@ -77,14 +89,26 @@ export const getLeadById = async (req, res) => {
 // PATCH /api/leads/:id
 export const updateLead = async (req, res) => {
     try {
-        const { name, phone, platformSource, status, budget, notes, propertyId } = req.body;
+        const { name, phone, message, source, platformSource, propertyInterest, status, budget, notes, propertyId } = req.body;
+
+        // Basic Ethiopian phone validation if phone is provided
+        if (phone) {
+            const ethPhoneRegex = /^\+251[79]\d{8}$/;
+            const altEthPhoneRegex = /^0[79]\d{8}$/;
+            if (!ethPhoneRegex.test(phone) && !altEthPhoneRegex.test(phone)) {
+                return res.status(400).json({ success: false, message: 'Invalid Ethiopian phone format. Use +251... or 09.../07...' });
+            }
+        }
 
         const lead = await prisma.lead.updateMany({
             where: { id: req.params.id, userId: req.user.id },
             data: {
                 ...(name && { name }),
                 ...(phone && { phone }),
+                ...(message && { message }),
+                ...(source && { source }),
                 ...(platformSource && { platformSource }),
+                ...(propertyInterest && { propertyInterest }),
                 ...(status && { status }),
                 ...(budget !== undefined && { budget: budget ? parseFloat(budget) : null }),
                 ...(notes !== undefined && { notes }),

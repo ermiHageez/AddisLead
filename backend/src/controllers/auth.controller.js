@@ -1,4 +1,6 @@
 import { registerUser, loginUser } from "../services/auth.service.js";
+import jwt from "jsonwebtoken";
+import { generateAccessToken, generateRefreshToken } from "../utils/token.js";
 
 export const register = async (req, res) => {
   try {
@@ -47,9 +49,6 @@ export const login = async (req, res) => {
   }
 };
 
-import jwt from "jsonwebtoken";
-import { generateAccessToken } from "../utils/token.js";
-
 export const refresh = (req, res) => {
   const { refreshToken } = req.body;
 
@@ -63,10 +62,14 @@ export const refresh = (req, res) => {
     );
     const payload = { id: decoded.id, role: decoded.role };
     const newAccessToken = generateAccessToken(payload);
-    res.status(200).json({ accessToken: newAccessToken });
+    const newRefreshToken = generateRefreshToken(payload);
+
+    res.status(200).json({
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken
+    });
   } catch (err) {
     console.error(err);
-    res.status(403).json({ message: "Invalid refresh token" });
+    res.status(403).json({ message: "Invalid or expired refresh token" });
   }
-
-}
+};

@@ -47,10 +47,13 @@ enum LeadStatus {
 
 model Lead {
   id             String     @id @default(uuid())
-  name           String
-  phone          String?
-  platformSource String?    // TikTok, Telegram, Direct, etc.
-  status         LeadStatus @default(NEW)
+  name             String
+  phone            String?
+  message          String?
+  source           String?    // TikTok, Telegram, etc.
+  propertyInterest String?
+  platformSource   String?    // TikTok, Telegram, Direct, etc.
+  status           LeadStatus @default(NEW)
   budget         Float?
   notes          String?
   createdAt      DateTime   @default(now())
