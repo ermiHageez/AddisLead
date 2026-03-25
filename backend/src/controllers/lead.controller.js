@@ -58,10 +58,17 @@ export const createLead = async (req, res) => {
                 propertyInterest: propertyInterest || null,
                 status: status || 'NEW',
                 budget: budget ? parseFloat(budget) : null,
-                notes: notes || null,
                 userId,
                 propertyId: propertyId || null,
+                notes: notes ? {
+                    create: {
+                        text: notes
+                    }
+                } : undefined
             },
+            include: {
+                notes: true
+            }
         });
 
         res.status(201).json({ success: true, data: lead });
@@ -76,7 +83,11 @@ export const getLeadById = async (req, res) => {
     try {
         const lead = await prisma.lead.findFirst({
             where: { id: req.params.id, userId: req.user.id },
-            include: { property: true },
+            include: {
+                property: true,
+                notes: { orderBy: { createdAt: 'desc' } },
+                reminders: { orderBy: { dueAt: 'asc' } }
+            },
         });
 
         if (!lead) return res.status(404).json({ success: false, message: 'Lead not found' });
@@ -111,7 +122,6 @@ export const updateLead = async (req, res) => {
                 ...(propertyInterest && { propertyInterest }),
                 ...(status && { status }),
                 ...(budget !== undefined && { budget: budget ? parseFloat(budget) : null }),
-                ...(notes !== undefined && { notes }),
                 ...(propertyId !== undefined && { propertyId }),
             },
         });
@@ -138,6 +148,81 @@ export const deleteLead = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Lead not found or unauthorized' });
 
         res.json({ success: true, message: 'Lead deleted' });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+// PUT /api/leads/:id/status
+export const updateLeadStatus = async (req, res) => {
+    try {
+        const { status } = req.body;
+        const validStatuses = ['NEW', 'CONTACTED', 'INTERESTED', 'VIEWING', 'SOLD'];
+
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({ success: false, message: 'Invalid status' });
+        }
+
+        const lead = await prisma.lead.updateMany({
+            where: { id: req.params.id, userId: req.user.id },
+            data: { status },
+        });
+
+        if (lead.count === 0)
+            return res.status(404).json({ success: false, message: 'Lead not found or unauthorized' });
+
+        res.json({ success: true, message: 'Status updated successfully' });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+// POST /api/leads/:id/notes
+export const addLeadNote = async (req, res) => {
+    try {
+        const { text } = req.body;
+        if (!text) return res.status(400).json({ success: false, message: 'Note text is required' });
+
+        // Verify lead ownership
+        const lead = await prisma.lead.findFirst({
+            where: { id: req.params.id, userId: req.user.id }
+        });
+        if (!lead) return res.status(404).json({ success: false, message: 'Lead not found' });
+
+        const note = await prisma.note.create({
+            data: {
+                text,
+                leadId: req.params.id
+            }
+        });
+
+        res.status(201).json({ success: true, data: note });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+// POST /api/leads/:id/reminders
+export const addLeadReminder = async (req, res) => {
+    try {
+        const { title, dueAt } = req.body;
+        if (!dueAt) return res.status(400).json({ success: false, message: 'Due date is required' });
+
+        // Verify lead ownership
+        const lead = await prisma.lead.findFirst({
+            where: { id: req.params.id, userId: req.user.id }
+        });
+        if (!lead) return res.status(404).json({ success: false, message: 'Lead not found' });
+
+        const reminder = await prisma.reminder.create({
+            data: {
+                title: title || 'Follow up',
+                dueAt: new Date(dueAt),
+                leadId: req.params.id
+            }
+        });
+
+        res.status(201).json({ success: true, data: reminder });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Server error' });
     }

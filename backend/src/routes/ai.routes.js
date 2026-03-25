@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { generateAIContent, getAIHistory } from '../controllers/ai.controller.js';
+import { getAiUsage } from '../controllers/subscriptionController.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import rateLimit from 'express-rate-limit';
 
@@ -15,5 +16,6 @@ router.use(authenticate);
 
 router.post('/generate', aiLimiter, generateAIContent);
 router.get('/history', getAIHistory);
+router.get('/usage', getAiUsage);
 
 export default router;

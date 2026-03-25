@@ -20,6 +20,7 @@ model User {
   leads        Lead[]
   properties   Property[]
   aiRecords    AIRecord[]
+  subscription Subscription?
 }
 
 model Property {
@@ -40,9 +41,10 @@ model Property {
 
 enum LeadStatus {
   NEW
-  FOLLOW_UP
-  VISITING
-  CLOSED
+  CONTACTED
+  INTERESTED
+  VIEWING
+  SOLD
 }
 
 model Lead {
@@ -55,15 +57,36 @@ model Lead {
   platformSource   String?    // TikTok, Telegram, Direct, etc.
   status           LeadStatus @default(NEW)
   budget         Float?
-  notes          String?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
-
   userId         String
   user           User       @relation(fields: [userId], references: [id])
   
   propertyId     String?
   property       Property?  @relation(fields: [propertyId], references: [id])
+
+  notes          Note[]
+  reminders      Reminder[]
+}
+
+model Note {
+  id        String   @id @default(uuid())
+  text      String
+  createdAt DateTime @default(now())
+  
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+}
+
+model Reminder {
+  id        String   @id @default(uuid())
+  title     String?
+  dueAt     DateTime
+  isDone    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
 }
 
 model AIRecord {
@@ -76,3 +99,33 @@ model AIRecord {
   userId     String
   user       User     @relation(fields: [userId], references: [id])
 }
+
+enum SubscriptionPlan {
+  TRIAL
+  BASIC
+  PRO
+  AGENCY
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELED
+}
+
+model Subscription {
+  id               String           @id @default(uuid())
+  plan             SubscriptionPlan @default(TRIAL)
+  status           SubscriptionStatus @default(ACTIVE)
+  startsAt         DateTime         @default(now())
+  expiresAt        DateTime?
+  aiUsageToday     Int              @default(0)
+  aiUsageResetDate DateTime         @default(now())
+  
+  userId           String           @unique
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+}
+

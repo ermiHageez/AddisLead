@@ -5,25 +5,25 @@ export const getDashboardStats = async (req, res) => {
     try {
         const userId = req.user.id;
 
-        const [totalLeads, newLeads, followUpLeads, visitingLeads, closedLeads, totalProperties] =
+        const [totalLeads, newLeads, contactedLeads, viewingLeads, soldLeads, totalProperties] =
             await Promise.all([
                 prisma.lead.count({ where: { userId } }),
                 prisma.lead.count({ where: { userId, status: 'NEW' } }),
-                prisma.lead.count({ where: { userId, status: 'FOLLOW_UP' } }),
-                prisma.lead.count({ where: { userId, status: 'VISITING' } }),
-                prisma.lead.count({ where: { userId, status: 'CLOSED' } }),
+                prisma.lead.count({ where: { userId, status: 'CONTACTED' } }),
+                prisma.lead.count({ where: { userId, status: 'VIEWING' } }),
+                prisma.lead.count({ where: { userId, status: 'SOLD' } }),
                 prisma.property.count({ where: { userId } }),
             ]);
 
-        // Calculate pipeline value (sum of budget for non-closed leads)
+        // Calculate pipeline value (sum of budget for non-sold leads)
         const pipelineValue = await prisma.lead.aggregate({
-            where: { userId, status: { not: 'CLOSED' }, budget: { not: null } },
+            where: { userId, status: { not: 'SOLD' }, budget: { not: null } },
             _sum: { budget: true },
         });
 
-        // Total sales value (closed leads with budget)
+        // Total sales value (sold leads with budget)
         const salesValue = await prisma.lead.aggregate({
-            where: { userId, status: 'CLOSED', budget: { not: null } },
+            where: { userId, status: 'SOLD', budget: { not: null } },
             _sum: { budget: true },
         });
 
@@ -51,9 +51,9 @@ export const getDashboardStats = async (req, res) => {
             data: {
                 totalLeads,
                 newLeads,
-                followUpLeads,
-                visitingLeads,
-                closedLeads,
+                contactedLeads,
+                viewingLeads,
+                soldLeads,
                 totalProperties,
                 pipelineValue: pipelineValue._sum.budget || 0,
                 salesValue: salesValue._sum.budget || 0,
@@ -83,15 +83,15 @@ export const getInsights = async (req, res) => {
 
         // Conversion rate
         const totalCount = await prisma.lead.count({ where: { userId } });
-        const closedCount = await prisma.lead.count({ where: { userId, status: 'CLOSED' } });
-        const conversionRate = totalCount > 0 ? Math.round((closedCount / totalCount) * 100) : 0;
+        const soldCount = await prisma.lead.count({ where: { userId, status: 'SOLD' } });
+        const conversionRate = totalCount > 0 ? Math.round((soldCount / totalCount) * 100) : 0;
 
         res.json({
             success: true,
             data: {
                 conversionRate,
                 totalLeads: totalCount,
-                closedDeals: closedCount,
+                closedDeals: soldCount,
                 recentActivity: recentLeads,
             },
         });

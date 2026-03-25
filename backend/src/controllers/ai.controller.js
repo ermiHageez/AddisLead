@@ -10,19 +10,66 @@ export const generateAIContent = async (req, res) => {
         if (!prompt) return res.status(400).json({ success: false, message: 'Prompt is required' });
         if (!actionType) return res.status(400).json({ success: false, message: 'actionType is required (Caption or Reply)' });
 
-        // AI Usage Limits: 3 generations per hour (for free users)
+        // Verify user exists (prevents P2003 if token is from a deleted user/reset DB)
+        const userExists = await prisma.user.findUnique({ where: { id: userId } });
+        if (!userExists) {
+            return res.status(401).json({ success: false, message: 'User no longer exists. Please log in again.' });
+        }
+
+        // 1. Get/Initialize Subscription
+        let subscription = await prisma.subscription.findUnique({ where: { userId } });
+        if (!subscription) {
+            subscription = await prisma.subscription.create({
+                data: {
+                    userId,
+                    plan: 'TRIAL',
+                    status: 'ACTIVE',
+                    expiresAt: new Date(Date.now() + 28 * 24 * 60 * 60 * 1000),
+                    aiUsageToday: 0,
+                    aiUsageResetDate: new Date()
+                }
+            });
+        }
+
+        // 2. Daily Reset Check
+        const now = new Date();
+        const resetDate = new Date(subscription.aiUsageResetDate);
+        const isSameDay = now.getFullYear() === resetDate.getFullYear() &&
+            now.getMonth() === resetDate.getMonth() &&
+            now.getDate() === resetDate.getDate();
+
+        if (!isSameDay) {
+            subscription = await prisma.subscription.update({
+                where: { userId },
+                data: {
+                    aiUsageToday: 0,
+                    aiUsageResetDate: now
+                }
+            });
+        }
+
+        // 3. Check Limits
+        const aiLimits = { TRIAL: 5, BASIC: 50, PRO: 999999, AGENCY: 999999 };
+        const limit = aiLimits[subscription.plan] || 5;
+
+        if (subscription.aiUsageToday >= limit) {
+            return res.status(403).json({
+                success: false,
+                message: `Daily AI limit reached for ${subscription.plan} plan. Please upgrade for more.`,
+                limitReached: true
+            });
+        }
+
+        // 4. Secondary Hourly Spam Check (Optional, but good for security)
         const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-        const count = await prisma.aIRecord.count({
-            where: {
-                userId,
-                createdAt: { gte: oneHourAgo },
-            },
+        const hourlyCount = await prisma.aIRecord.count({
+            where: { userId, createdAt: { gte: oneHourAgo } },
         });
 
-        if (count >= 3) {
+        if (hourlyCount >= 10) { // Increased from 3 to 10 for better UX while still preventing spam
             return res.status(429).json({
                 success: false,
-                message: 'Hourly AI limit reached. You can only generate 3 completions per hour on the free plan.'
+                message: 'You are sending prompts too quickly. Please wait a moment.'
             });
         }
 
@@ -48,6 +95,14 @@ export const generateAIContent = async (req, res) => {
                 actionType,
                 userId,
             },
+        });
+
+        // Increment AI Usage Counter
+        await prisma.subscription.update({
+            where: { userId },
+            data: {
+                aiUsageToday: { increment: 1 }
+            }
         });
 
         res.status(201).json({ success: true, data: { response: aiResponse, id: aiRecord.id } });
