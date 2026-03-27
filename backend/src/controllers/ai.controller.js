@@ -1,5 +1,5 @@
 import prisma from '../utils/prisma.js';
-import { generateContent } from '../services/ai.service.js';
+import { generateContent, generateMarketResearch, generateLeadAnalysis } from '../services/ai.service.js';
 
 // POST /api/ai/generate
 export const generateAIContent = async (req, res) => {
@@ -124,5 +124,70 @@ export const getAIHistory = async (req, res) => {
         res.json({ success: true, data: records });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+// GET /api/ai/research (PRO and AGENCY only)
+export const getMarketResearch = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const aiResponse = await generateMarketResearch(userId);
+
+        // Save the record for history
+        await prisma.aIRecord.create({
+            data: {
+                prompt: "Generate Market Research",
+                response: aiResponse,
+                actionType: "Market Research",
+                userId,
+            },
+        });
+
+        // Increment AI Usage Counter
+        await prisma.subscription.update({
+            where: { userId },
+            data: { aiUsageToday: { increment: 1 } }
+        });
+
+        res.json({ success: true, data: { research: aiResponse } });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Failed to generate market research.' });
+    }
+};
+
+
+// GET /api/ai/analysis/:leadId (AGENCY only)
+export const getLeadAnalysis = async (req, res) => {
+    try {
+        const { leadId } = req.params;
+        const userId = req.user.id;
+
+        const analysisData = await generateLeadAnalysis(leadId, userId);
+        const formattedResponse = `Heat Score: ${analysisData.leadHeatScore}/100\n\nClosing Strategy:\n${analysisData.closingStrategy}\n\nActivity Summary:\n${analysisData.activitySummary}`;
+
+        // Save the record for history
+        await prisma.aIRecord.create({
+            data: {
+                prompt: `Analyze Lead ID: ${leadId}`,
+                response: formattedResponse,
+                actionType: "Lead Analysis",
+                userId,
+            },
+        });
+
+        // Increment AI Usage Counter
+        await prisma.subscription.update({
+            where: { userId },
+            data: { aiUsageToday: { increment: 1 } }
+        });
+
+        res.json({ success: true, data: analysisData });
+    } catch (err) {
+        console.error(err);
+        if (err.message === 'Lead not found') {
+            return res.status(404).json({ success: false, message: 'Lead not found' });
+        }
+        res.status(500).json({ success: false, message: 'Failed to generate lead analysis.' });
     }
 };

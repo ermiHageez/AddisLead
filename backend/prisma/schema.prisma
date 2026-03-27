@@ -21,6 +21,15 @@ model User {
   properties   Property[]
   aiRecords    AIRecord[]
   subscription Subscription?
+  channels     TelegramChannel[]
+}
+
+model TelegramChannel {
+  id              String @id @default(uuid())
+  chatId          String @unique
+  channelUsername String?
+  userId          String
+  user            User   @relation(fields: [userId], references: [id])
 }
 
 model Property {
@@ -57,6 +66,7 @@ model Lead {
   platformSource   String?    // TikTok, Telegram, Direct, etc.
   status           LeadStatus @default(NEW)
   budget         Float?
+  telegramId     String?    // Unique ID for Telegram user merging
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
   userId         String
